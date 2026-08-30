@@ -518,9 +518,22 @@ class BlueBubblesAdapter(BasePlatformAdapter):
             res = await self._api_post("/api/v1/chat/new", payload)
             data = res.get("data") or {}
             msg_id = data.get("guid") or data.get("messageGuid") or "ok"
-            return SendResult(success=True, message_id=str(msg_id), raw_response=res)
+            result = SendResult(success=True, message_id=str(msg_id), raw_response=res)
+            self._record_sent_message(address, message, result)
+            return result
         except Exception as exc:
             return SendResult(success=False, error=str(exc))
+
+    def _record_sent_message(
+        self, chat_id: str, text: str, result: SendResult
+    ) -> None:
+        message_id = result.message_id
+        if not result.success or not message_id or message_id == "ok":
+            return
+        rich_sent_store.record(chat_id, message_id, text)
+        self._sent_guids[message_id] = None
+        if len(self._sent_guids) > 500:
+            self._sent_guids.popitem(last=False)
 
     # ------------------------------------------------------------------
     # Text sending
@@ -582,11 +595,7 @@ class BlueBubblesAdapter(BasePlatformAdapter):
                 last = SendResult(
                     success=True, message_id=str(msg_id), raw_response=res
                 )
-                if msg_id and msg_id != "ok":
-                    rich_sent_store.record(chat_id, msg_id, chunk)
-                    self._sent_guids[msg_id] = None
-                    if len(self._sent_guids) > 500:
-                        self._sent_guids.popitem(last=False)
+                self._record_sent_message(chat_id, chunk, last)
             except Exception as exc:
                 return SendResult(success=False, error=str(exc))
         return last
