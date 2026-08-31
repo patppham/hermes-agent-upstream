@@ -263,7 +263,9 @@ class BlueBubblesAdapter(BasePlatformAdapter):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def connect(self, *, is_reconnect: bool = False) -> bool:
+    async def connect(
+        self, *, is_reconnect: bool = False, send_only: bool = False
+    ) -> bool:
         if not self.server_url or not self.password:
             logger.error(
                 "[bluebubbles] BLUEBUBBLES_SERVER_URL and BLUEBUBBLES_PASSWORD are required"
@@ -295,6 +297,10 @@ class BlueBubblesAdapter(BasePlatformAdapter):
                 self.client = None
             return False
 
+        # Outbound-only callers do not own the gateway's webhook lifecycle.
+        if send_only:
+            return True
+
         # Explicit body cap: BlueBubbles webhook events are small JSON (or
         # form-encoded) payloads. client_max_size makes aiohttp enforce the
         # cap on every read path — including chunked requests that carry no
@@ -324,16 +330,17 @@ class BlueBubblesAdapter(BasePlatformAdapter):
         return True
 
     async def disconnect(self) -> None:
-        # Unregister webhook before cleaning up
-        await self._unregister_webhook()
+        # Only the adapter that created the webhook listener may remove it or
+        # update gateway-owned connection state.
+        if self._runner is not None:
+            await self._unregister_webhook()
+            await self._runner.cleanup()
+            self._runner = None
+            self._mark_disconnected()
 
         if self.client:
             await self.client.aclose()
             self.client = None
-        if self._runner:
-            await self._runner.cleanup()
-            self._runner = None
-        self._mark_disconnected()
 
     @property
     def _webhook_url(self) -> str:
