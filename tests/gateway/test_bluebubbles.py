@@ -63,6 +63,11 @@ class TestBlueBubblesHelpers:
         adapter = _make_adapter(monkeypatch)
         assert adapter.format_message("## Heading\ntext") == "Heading\ntext"
 
+    def test_format_message_preserves_markdown_link_urls(self, monkeypatch):
+        adapter = _make_adapter(monkeypatch)
+        text = "[click here](https://example.com/path?q=1)"
+        assert adapter.format_message(text) == "click here https://example.com/path?q=1"
+
 
     def test_init_normalizes_webhook_path(self, monkeypatch):
         adapter = _make_adapter(monkeypatch, webhook_path="bluebubbles-webhook")

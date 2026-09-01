@@ -830,6 +830,9 @@ class BlueBubblesAdapter(BasePlatformAdapter):
         return info
 
     def format_message(self, content: str) -> str:
+        # iMessage auto-linkifies bare URLs, so preserve the destination from
+        # Markdown links before the shared plain-text formatter removes it.
+        content = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 \2", content)
         return strip_markdown(content)
 
     # ------------------------------------------------------------------
